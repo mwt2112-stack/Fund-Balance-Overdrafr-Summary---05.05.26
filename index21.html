@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Columbia University – Fund Balance / Overdraft Summary Report (Training)</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { zoom: 1.5; }
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10px; color: #111;
+  background: #e8e8e8;
+  display: flex; flex-direction: row;
+  height: calc(100vh / 1.5); overflow: hidden;
+}
+#report-panel {
+  flex: 1 1 auto; background: #fff; min-width: 0;
+  display: flex; flex-direction: column;
+  height: 100%; overflow: hidden;
+}
+#report-static { flex-shrink: 0; background: #fff; z-index: 10; }
+#table-scroll-area { flex: 1 1 auto; overflow: auto; position: relative; }
+
+/* NAV */
+.nav-bar { background:#fff; border-bottom:1px solid #ccc; padding:2px 10px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; }
+.nav-bar a { color:#00419e; text-decoration:none; font-size:9.5px; font-weight:bold; white-space:nowrap; padding:2px 0; }
+.nav-bar a:hover { text-decoration:underline; }
+
+/* HEADER */
+.header-top { display:flex; align-items:flex-start; padding:5px 10px 3px; }
+.logo-area { display:flex; align-items:center; gap:4px; min-width:155px; flex-shrink:0; }
+.logo-crown { font-size:15px; color:#003087; }
+.logo-text .cu-name { font-size:9px; font-weight:bold; color:#003087; text-transform:uppercase; letter-spacing:.3px; line-height:1.2; }
+.logo-text .cu-sub  { font-size:6px; color:#003087; text-transform:uppercase; }
+.center-titles { flex:1; text-align:center; line-height:1.5; }
+.center-titles .fds { font-size:9px; color:#333; font-style:italic; }
+.center-titles .t1  { font-size:12px; font-weight:bold; }
+.center-titles .t2  { font-size:11px; font-weight:bold; }
+.center-titles .t3  { font-size:10px; }
+.run-block { font-size:9.5px; text-align:right; white-space:nowrap; line-height:1.7; }
+.run-block b { font-weight:bold; }
+
+/* META */
+.meta-block { padding:3px 10px 4px; font-size:9.5px; line-height:1.6; border-bottom:1px solid #999; }
+.meta-block b { font-weight:bold; }
+.meta-params-label { font-weight:bold; margin-top:2px; }
+.meta-params { padding-left:12px; }
+
+/* PILL BAR */
+.pill-bar-wrap {
+  padding:4px 10px 3px; border-bottom:1px solid #ddd; border-top:1px solid #eee;
+  background:#fafafa; display:flex; align-items:center; gap:8px; flex-shrink:0;
+}
+.pill-bar-label { font-size:8px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#999; white-space:nowrap; }
+.pill {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:2px 10px 2px 7px; border-radius:100px;
+  border:1.5px solid #bbb; background:#fff;
+  font-size:9px; font-weight:bold; cursor:pointer;
+  transition:all .15s; user-select:none; color:#444; white-space:nowrap;
+}
+.pill-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.pill:hover { border-color:#555; color:#111; }
+
+.pill[data-pill="project"] .pill-dot    { background:#0e7490; }
+.pill[data-pill="project"].pill-on      { background:#d0f0f8; border-color:#0e7490; color:#0a5c6e; }
+.pill[data-pill="revenue"] .pill-dot    { background:#2a8a2a; }
+.pill[data-pill="revenue"].pill-on      { background:#dff5df; border-color:#1a5c1a; color:#1a5c1a; }
+.pill[data-pill="expense"] .pill-dot    { background:#c97b00; }
+.pill[data-pill="expense"].pill-on      { background:#fff3d6; border-color:#8a4b00; color:#8a4b00; }
+.pill[data-pill="balance"] .pill-dot    { background:#003087; }
+.pill[data-pill="balance"].pill-on      { background:#dde8ff; border-color:#003087; color:#001a57; }
+
+/* S4 HIGHLIGHT ENGINE */
+@keyframes hlShimmer  { 0%{background-position:-200% center,0 0} 100%{background-position:300% center,0 0} }
+@keyframes hlBeat     { 0%,100%{filter:brightness(1)} 45%{filter:brightness(1.28)} }
+@keyframes hlIn       { from{opacity:0;transform:translateX(4px)} to{opacity:1;transform:translateX(0)} }
+@keyframes glowBreathe{ 0%,100%{opacity:.45} 50%{opacity:1} }
+th.hl-hdr {
+  position:relative !important; overflow:hidden !important;
+  background-image:linear-gradient(105deg,rgba(255,255,255,0) 20%,rgba(255,255,255,.55) 50%,rgba(255,255,255,0) 80%),linear-gradient(var(--hl-fill),var(--hl-fill)) !important;
+  background-size:200% 100%,100% 100% !important; background-position:-200% center,0 0 !important;
+  animation:hlShimmer 2.6s ease-in-out infinite !important;
+  border-left:1.5px solid var(--hl-line) !important; border-right:1.5px solid var(--hl-line) !important;
+  border-top:2px solid var(--hl-line) !important; border-bottom:3px solid var(--hl-strong) !important;
+  color:var(--hl-text) !important;
+}
+td.hl-cell {
+  background:var(--hl-cell) !important;
+  border-left:1px solid var(--hl-soft) !important; border-right:1px solid var(--hl-soft) !important;
+  color:var(--hl-text) !important; font-weight:700 !important;
+  animation:hlBeat 2.8s ease-in-out infinite,hlIn .35s ease both !important;
+}
+.hl-glow-strip {
+  position:absolute; pointer-events:none; z-index:3; top:0;
+  background:radial-gradient(ellipse 60% 55% at 50% 50%,var(--hl-radial-center) 0%,var(--hl-radial-mid) 70%,transparent 100%);
+  animation:glowBreathe 2.8s ease-in-out infinite;
+}
+.hl-glow-strip::before,.hl-glow-strip::after {
+  content:''; position:absolute; top:0; bottom:0; width:2px;
+  background:linear-gradient(180deg,transparent 0%,var(--hl-edge) 8%,var(--hl-edge) 92%,transparent 100%);
+  animation:glowBreathe 2.8s ease-in-out infinite;
+}
+.hl-glow-strip::before{left:0;} .hl-glow-strip::after{right:0;}
+
+/* TABLE */
+.table-wrapper { padding:0 4px 10px; position:relative; }
+table.fbo { border-collapse:collapse; font-size:8px; white-space:nowrap; table-layout:auto; width:100%; min-width:1200px; }
+.fbo thead { position:sticky; top:0; z-index:4; }
+.fbo thead th {
+  background:#fff; text-align:center; font-weight:bold; font-size:7.5px;
+  padding:2px 3px; border:1px solid #888; border-bottom:2px solid #888;
+  vertical-align:bottom; line-height:1.2; white-space:normal; overflow:hidden;
+}
+.fbo thead th.lft { text-align:left; }
+/* Column widths matching reference */
+.fbo col.c-bu        { width:55px; }
+.fbo col.c-owndept   { width:130px; }
+.fbo col.c-deptdesc  { width:155px; }
+.fbo col.c-fund      { width:45px; }
+.fbo col.c-funddesc  { width:175px; }
+.fbo col.c-projnum   { width:80px; }
+.fbo col.c-projdesc  { width:130px; }
+.fbo col.c-begbal    { width:90px; }
+.fbo col.c-revdirect { width:95px; }
+.fbo col.c-revindir  { width:100px; }
+.fbo col.c-expdirect { width:105px; }
+.fbo col.c-expindir  { width:90px; }
+.fbo col.c-transfers { width:105px; }
+.fbo col.c-endbal    { width:90px; }
+.fbo col.c-surplus   { width:85px; }
+.fbo col.c-overdraft { width:86px; }
+.fbo tbody td { padding:1px 3px; vertical-align:middle; font-size:8px; text-align:left; white-space:nowrap; height:16px; overflow:hidden; text-overflow:ellipsis; }
+.fbo tbody td.r { text-align:right; }
+.fbo tbody tr:hover td { background:#f5f5f5; }
+tr.grand-total td { font-weight:bold; border-top:2px solid #333; border-bottom:3px double #111; text-align:right; padding:2px 3px; }
+tr.grand-total td.lbl { text-align:left; }
+
+/* EXPLAIN PANEL */
+#explain-panel { width:0; min-width:0; overflow:hidden; background:#fafafa; border-left:3px solid #003087; transition:width .28s ease,min-width .28s ease; display:flex; flex-direction:column; flex-shrink:0; height:100%; }
+#explain-panel.open { width:310px; min-width:290px; }
+.panel-header { background:#003087; color:#fff; padding:6px 10px; font-size:10px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; min-width:290px; flex-shrink:0; }
+.panel-header button { background:none; border:none; color:#fff; cursor:pointer; font-size:13px; }
+#explain-inner { padding:10px; overflow-y:auto; flex:1; min-width:290px; }
+.explain-field-name { font-size:13px; font-weight:bold; color:#003087; margin-bottom:7px; border-bottom:1px solid #ccd; padding-bottom:4px; }
+.explain-section { margin-bottom:8px; }
+.tip-badge { display:inline-block; background:#003087; color:#fff; font-size:8px; font-weight:bold; padding:1px 5px; border-radius:2px; margin-bottom:2px; letter-spacing:.3px; }
+.explain-section-body { font-size:10.5px; color:#222; line-height:1.55; }
+
+.footnotes { padding:4px 10px; font-size:7.5px; color:#444; font-style:italic; border-top:1px solid #ddd; background:#fff; position:fixed; bottom:0; left:0; right:0; z-index:50; }
+.training-badge { position:fixed; bottom:10px; left:10px; background:#003087; color:#fff; font-size:9px; padding:3px 9px; border-radius:10px; z-index:999; }
+</style>
+</head>
+<body>
+<div id="report-panel">
+  <div id="report-static">
+
+    <!-- NAV -->
+    <div class="nav-bar">
+      <a href="#">&lt; Previous Accounting Period</a>
+      <a href="#">Fund Balance / Overdraft Summary Report</a>
+      <a href="#">Next Accounting Period &gt;</a>
+    </div>
+
+    <!-- HEADER -->
+    <div class="header-top">
+      <div class="logo-area">
+        <div class="logo-crown">♛</div>
+        <div class="logo-text">
+          <div class="cu-name">Columbia University</div>
+          <div class="cu-sub">In the City of New York</div>
+        </div>
+      </div>
+      <div class="center-titles">
+        <div class="fds">Financial Data Store</div>
+        <div class="t1">Columbia University</div>
+        <div class="t2">Fund Balance / Overdraft Summary Report</div>
+        <div class="t3">As of 3/31/2026</div>
+      </div>
+      <div class="run-block">
+        <div><b>Run Date:</b> 5/1/2026</div>
+        <div><b>Run Time:</b> 2:24:58PM</div>
+      </div>
+    </div>
+
+    <!-- META -->
+    <div class="meta-block">
+      <div><b>Report ID:</b> RPT1058.1</div>
+      <div><b>Business Units:</b> COLUM - Columbia University</div>
+      <div class="meta-params-label">Run-Time Parameters</div>
+      <div class="meta-params">
+        <div><b>Department/Department Rollup Selection Name:</b> ALL</div>
+        <div><b>Fund(s):</b> ALL</div>
+        <div><b>Project(s):</b> UR012345 - ENG Training</div>
+        <div><b>Actuals:</b> FY2026, Period 09-March</div>
+        <div><b>Central / Non-Central Selection:</b> ALL</div>
+      </div>
+    </div>
+
+    <!-- PILL BAR — hidden, ↑ to activate -->
+    <div class="pill-bar-wrap" id="pill-bar" style="display:none;">
+      <span class="pill-bar-label">Highlight:</span>
+      <div class="pill" data-pill="project"  onclick="togglePill(this)"><span class="pill-dot"></span> Project Info</div>
+      <div class="pill" data-pill="revenue"  onclick="togglePill(this)"><span class="pill-dot"></span> Revenue</div>
+      <div class="pill" data-pill="expense"  onclick="togglePill(this)"><span class="pill-dot"></span> Expense</div>
+      <div class="pill" data-pill="balance"  onclick="togglePill(this)"><span class="pill-dot"></span> Fund Balance</div>
+    </div>
+  </div><!-- /report-static -->
+
+  <div id="table-scroll-area">
+  <div class="table-wrapper" id="table-wrapper">
+  <table class="fbo" id="main-table">
+    <colgroup>
+      <col class="c-bu"><col class="c-owndept"><col class="c-deptdesc">
+      <col class="c-fund"><col class="c-funddesc"><col class="c-projnum"><col class="c-projdesc">
+      <col class="c-begbal"><col class="c-revdirect"><col class="c-revindir">
+      <col class="c-expdirect"><col class="c-expindir"><col class="c-transfers">
+      <col class="c-endbal"><col class="c-surplus"><col class="c-overdraft">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="lft" data-key="bu">BU</th>
+        <th class="lft col-project" data-key="proj_owning_dept">Project - Owning Department</th>
+        <th class="lft col-project" data-key="dept_desc">Dept Description</th>
+        <th class="lft" data-key="fund">Fund</th>
+        <th class="lft" data-key="fund_desc">Fund Description</th>
+        <th class="lft col-project" data-key="project_num">Project #</th>
+        <th class="lft col-project" data-key="project_desc">Project Description</th>
+        <th class="r" data-key="beg_fund_balance">Beginning<br>Fund Balance</th>
+        <th class="r col-revenue" data-key="ytd_direct_revenue">YTD Direct<br>Revenue</th>
+        <th class="r col-revenue" data-key="ytd_indirect_source">YTD Indirect<br>Source</th>
+        <th class="r col-expense" data-key="ytd_direct_expense">YTD Direct<br>Expense</th>
+        <th class="r col-expense" data-key="ytd_indirect_use">YTD Indirect<br>Use</th>
+        <th class="r" data-key="non_op_transfers">Non Operational<br>Transfers</th>
+        <th class="r col-balance" data-key="ending_fund_balance">Ending<br>Fund Balance</th>
+        <th class="r col-balance" data-key="surplus">Surplus<br>Fund Balance</th>
+        <th class="r col-balance" data-key="overdraft">Overdraft<br>Fund Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>COLUM</td>
+        <td class="col-project">5201234</td>
+        <td class="col-project">ENG Training</td>
+        <td>01</td>
+        <td>General Unrestricted Fund</td>
+        <td class="col-project">UR012345</td>
+        <td class="col-project">ENG Training</td>
+        <td class="r">(961.88)</td>
+        <td class="r col-revenue">-</td>
+        <td class="r col-revenue">-</td>
+        <td class="r col-expense">1,228,559.23</td>
+        <td class="r col-expense">-</td>
+        <td class="r">0.00</td>
+        <td class="r col-balance">1,227,597.35</td>
+        <td class="r col-balance">-</td>
+        <td class="r col-balance">1,227,597.35</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="footnotes">Columbia University Proprietary and Confidential &nbsp;&nbsp; Page No. 1</div>
+  </div>
+</div><!-- /report-panel -->
+
+<!-- EXPLAIN PANEL -->
+<div id="explain-panel">
+  <div class="panel-header">
+    <span>📘 Field Guide <span style="font-size:8px;font-weight:normal;opacity:.8;margin-left:8px;">click again to close</span></span>
+    <button id="panel-close" title="Close (Esc)">✕</button>
+  </div>
+  <div id="explain-inner">
+    <div id="explain-content">
+      <p style="color:#555;font-size:10px;line-height:1.55;">Click any <strong style="color:#003087;">column header</strong> to learn what it means.</p>
+    </div>
+  </div>
+</div>
+
+<div class="training-badge">🎓 Training Mode</div>
+
+<script>
+// ── PILL CONFIG ──
+var PILL_CFG = {
+  project: {
+    colClass:'col-project',
+    text:'#0a5c6e', line:'rgba(14,116,144,.38)', strong:'rgba(14,116,144,.72)',
+    soft:'rgba(14,116,144,.18)', fill:'rgba(14,116,144,.04)', cell:'rgba(14,116,144,.025)',
+    rCenter:'rgba(14,116,144,.04)', rMid:'rgba(14,116,144,.015)', edge:'rgba(14,116,144,.55)'
+  },
+  revenue: {
+    colClass:'col-revenue',
+    text:'#1a5c1a', line:'rgba(42,140,92,.38)', strong:'rgba(42,140,92,.72)',
+    soft:'rgba(42,140,92,.18)', fill:'rgba(42,140,92,.04)', cell:'rgba(42,140,92,.025)',
+    rCenter:'rgba(42,140,92,.04)', rMid:'rgba(42,140,92,.015)', edge:'rgba(42,140,92,.55)'
+  },
+  expense: {
+    colClass:'col-expense',
+    text:'#6b3800', line:'rgba(180,100,0,.38)', strong:'rgba(180,100,0,.72)',
+    soft:'rgba(180,100,0,.18)', fill:'rgba(196,167,71,.05)', cell:'rgba(196,167,71,.03)',
+    rCenter:'rgba(196,167,71,.05)', rMid:'rgba(196,167,71,.015)', edge:'rgba(180,100,0,.55)'
+  },
+  balance: {
+    colClass:'col-balance',
+    text:'#001a57', line:'rgba(0,48,135,.38)', strong:'rgba(0,48,135,.72)',
+    soft:'rgba(0,48,135,.18)', fill:'rgba(0,48,135,.04)', cell:'rgba(0,48,135,.025)',
+    rCenter:'rgba(0,48,135,.04)', rMid:'rgba(0,48,135,.015)', edge:'rgba(0,48,135,.55)'
+  }
+};
+
+var activePill = null, glowStrips = [], walkthroughIndex = -1;
+
+function applyVars(el, cfg) {
+  ['text','line','strong','soft','fill','cell','edge'].forEach(function(k){ el.style.setProperty('--hl-'+k, cfg[k]); });
+}
+function clearHighlights() {
+  document.querySelectorAll('.hl-hdr').forEach(function(el){ el.classList.remove('hl-hdr'); el.style.cssText=''; });
+  document.querySelectorAll('.hl-cell').forEach(function(el){ el.classList.remove('hl-cell'); el.style.cssText=''; });
+  glowStrips.forEach(function(s){ s.parentNode&&s.parentNode.removeChild(s); }); glowStrips=[];
+}
+function positionGlowStrips(colClass, cfg) {
+  var wrapper=document.getElementById('table-wrapper'), table=document.getElementById('main-table');
+  if(!wrapper||!table) return;
+  document.querySelectorAll('th.'+colClass).forEach(function(th){
+    var strip=document.createElement('div'); strip.className='hl-glow-strip';
+    strip.style.setProperty('--hl-radial-center', cfg.rCenter);
+    strip.style.setProperty('--hl-radial-mid', cfg.rMid);
+    strip.style.setProperty('--hl-edge', cfg.edge);
+    strip.style.left=(th.offsetLeft+table.offsetLeft)+'px';
+    strip.style.width=th.offsetWidth+'px';
+    strip.style.height=wrapper.scrollHeight+'px';
+    strip.style.top='0';
+    wrapper.appendChild(strip); glowStrips.push(strip);
+  });
+}
+function applyHighlight(pill) {
+  var cfg=PILL_CFG[pill]; if(!cfg) return;
+  document.querySelectorAll('th.'+cfg.colClass).forEach(function(th){ th.classList.add('hl-hdr'); applyVars(th,cfg); });
+  document.querySelectorAll('td.'+cfg.colClass).forEach(function(td){ td.classList.add('hl-cell'); applyVars(td,cfg); });
+  var firstTh=document.querySelector('th.'+cfg.colClass);
+  if(firstTh){var sa=document.getElementById('table-scroll-area'),thR=firstTh.getBoundingClientRect(),saR=sa.getBoundingClientRect();if(thR.left<saR.left+40||thR.right>saR.right-40){sa.scrollTo({left:sa.scrollLeft+(thR.left-saR.left)-60,behavior:'smooth'});}}
+  setTimeout(function(){positionGlowStrips(cfg.colClass,cfg);},60);
+}
+function togglePill(el) {
+  var p=el.getAttribute('data-pill');
+  if(activePill===p){el.classList.remove('pill-on');clearHighlights();activePill=null;return;}
+  if(activePill){var prev=document.querySelector('.pill[data-pill="'+activePill+'"]');if(prev)prev.classList.remove('pill-on');clearHighlights();}
+  el.classList.add('pill-on'); activePill=p; applyHighlight(p);
+}
+
+var sa=document.getElementById('table-scroll-area');
+if(sa) sa.addEventListener('scroll',function(){if(activePill){glowStrips.forEach(function(s){s.parentNode&&s.parentNode.removeChild(s);});glowStrips=[];positionGlowStrips(PILL_CFG[activePill].colClass,PILL_CFG[activePill]);}});
+
+// ── ARROW KEYS ──
+var PILL_ORDER=['project','revenue','expense','balance'], pillBarVisible=false;
+function showPillBar(){document.getElementById('pill-bar').style.display='flex';pillBarVisible=true;if(!activePill){var fp=document.querySelector('.pill[data-pill="project"]');if(fp)togglePill(fp);}}
+function hidePillBar(){document.getElementById('pill-bar').style.display='none';pillBarVisible=false;if(activePill){var prev=document.querySelector('.pill[data-pill="'+activePill+'"]');if(prev)prev.classList.remove('pill-on');clearHighlights();activePill=null;}}
+function navigatePill(dir){if(!pillBarVisible)return;var idx=activePill?PILL_ORDER.indexOf(activePill):-1,next=idx+dir;if(next<0)next=PILL_ORDER.length-1;if(next>=PILL_ORDER.length)next=0;var np=document.querySelector('.pill[data-pill="'+PILL_ORDER[next]+'"]');if(np)togglePill(np);}
+
+// ── FIELD GUIDE ──
+var EXPLANATIONS = {
+  bu:{ label:'BU — Business Unit', what:'The Business Unit identifies the institutional ledger where the transaction is recorded. COLUM represents Columbia University.', interpret:'Confirms the transaction belongs to the correct University ledger.', related:'Use with Fund, Department, and Project to confirm the correct financial structure.' },
+  proj_owning_dept:{ label:'Project - Owning Department', what:'The department code that owns the project. This is the organizational unit responsible for the project\'s financial activity.', interpret:'Identifies who is accountable for the project\'s fund balance.', related:'Use with Dept Description, Project #, and Fund to understand project ownership.' },
+  dept_desc:{ label:'Dept Description', what:'The readable name of the owning department code.', interpret:'Translates the department number into the department\'s actual name for easier identification.', related:'Paired directly with the Project - Owning Department code.' },
+  fund:{ label:'Fund', what:'The Fund identifies the type or source of money — such as unrestricted, sponsored, gift, or endowment.', interpret:'The fund determines what spending rules apply and whether the balance is restricted or flexible.', related:'Use with Fund Description, Project, and Ending Fund Balance.' },
+  fund_desc:{ label:'Fund Description', what:'The readable name of the Fund code.', interpret:'Translates the fund number into plain language so reviewers can quickly identify the funding type.', related:'Paired directly with Fund.' },
+  project_num:{ label:'Project #', what:'The project number identifies the specific award, initiative, or project the row belongs to.', interpret:'Every financial line in this report ties to one project. The project number is the key lookup field for research, review, and reconciliation.', related:'Use with Project Description, Fund, and Department to understand the full business context.' },
+  project_desc:{ label:'Project Description', what:'The readable title of the project.', interpret:'Confirms the project is the one you intended to review and provides plain-language context for the row.', related:'Paired directly with Project #.' },
+  beg_fund_balance:{ label:'Beginning Fund Balance', what:'The fund balance at the start of the current fiscal year, carried forward from the prior year end close.', interpret:'A negative beginning balance means the project started the year in an overdraft position. A positive value means prior year surplus was carried forward.', related:'Compare with Ending Fund Balance to understand how the balance changed during the year.' },
+  ytd_direct_revenue:{ label:'YTD Direct Revenue', what:'Total direct revenue recorded on the project from the start of the fiscal year through the current period.', interpret:'Direct revenue comes from sources like sponsor billings, tuition, fees, or other income posted directly to the project.', related:'Use with YTD Indirect Source and Ending Fund Balance to see the full revenue picture.' },
+  ytd_indirect_source:{ label:'YTD Indirect Source', what:'Indirect revenue credited to the project year to date, such as F&A cost recovery or allocations.', interpret:'Indirect sources are credits that flow into the project from overhead or recovery activity rather than direct billing.', related:'Use with YTD Direct Revenue and Ending Fund Balance.' },
+  ytd_direct_expense:{ label:'YTD Direct Expense', what:'Total direct expenses charged to the project from the start of the fiscal year through the current period.', interpret:'This is the core spending line — salary, fringe, supplies, travel, subcontracts, and other direct costs posted to the project. It is usually the largest driver of fund balance change.', related:'Compare with YTD Direct Revenue and Beginning Fund Balance to understand net impact.' },
+  ytd_indirect_use:{ label:'YTD Indirect Use', what:'Indirect charges applied to the project year to date, such as F&A expense or institutional allocations.', interpret:'These are overhead charges calculated based on direct costs. On sponsored projects, F&A rates apply to modified total direct costs.', related:'Use with YTD Direct Expense and Ending Fund Balance.' },
+  non_op_transfers:{ label:'Non Operational Transfers', what:'Transfers between funds or projects that are non-operational in nature — meaning they move money for structural or management purposes rather than reflecting actual spending or revenue.', interpret:'A 0.00 here means no internal transfers affected this project\'s balance during the period.', related:'Use with Beginning Fund Balance and Ending Fund Balance to understand all drivers of balance change.' },
+  ending_fund_balance:{ label:'Ending Fund Balance', what:'The fund balance as of the report date, after all YTD revenue, expense, and transfers have been applied to the beginning balance.', interpret:'This is the bottom line of the report. A positive balance is a surplus — money left over. A negative balance is an overdraft — spending exceeded available funds. This field drives the Surplus and Overdraft columns.', related:'Compare with Beginning Fund Balance. The difference reflects total net activity YTD.' },
+  surplus:{ label:'Surplus Fund Balance', what:'The ending fund balance when it is positive — meaning revenue and prior balance exceeded total expense and transfers.', interpret:'A dash or zero means no surplus exists. A positive value means funds remain available.', related:'Paired with Overdraft Fund Balance — only one will have a value for any given row.' },
+  overdraft:{ label:'Overdraft Fund Balance', what:'The ending fund balance when it is negative — meaning total spending exceeded available revenue and prior balance.', interpret:'An overdraft requires attention. It signals that the project has spent more than it has available and may need a funding transfer, correcting entry, or budget adjustment.', related:'Paired with Surplus Fund Balance — only one will have a value for any given row.' }
+};
+
+var activeHdrEl=null, activeHdrKey=null;
+function openFieldPanel(key,el){
+  if(activeHdrEl===el){closeFieldPanel();return;}
+  var data=EXPLANATIONS[key]; if(!data) return;
+  if(activeHdrEl) activeHdrEl.classList.remove('active');
+  activeHdrEl=el; activeHdrKey=key; el.classList.add('active');
+  document.getElementById('explain-content').innerHTML=
+    '<div class="explain-field-name">'+data.label+'</div>'+
+    '<div class="explain-section"><div class="tip-badge">WHAT IT IS</div><div class="explain-section-body">'+data.what+'</div></div>'+
+    '<div class="explain-section"><div class="tip-badge">HOW TO INTERPRET</div><div class="explain-section-body">'+data.interpret+'</div></div>'+
+    '<div class="explain-section"><div class="tip-badge">RELATED FIELDS</div><div class="explain-section-body">'+data.related+'</div></div>';
+  document.getElementById('explain-panel').classList.add('open');
+  document.getElementById('explain-inner').scrollTop=0;
+}
+function closeFieldPanel(){
+  document.getElementById('explain-panel').classList.remove('open');
+  if(activeHdrEl){activeHdrEl.classList.remove('active');activeHdrEl=null;activeHdrKey=null;}
+}
+document.getElementById('panel-close').addEventListener('click',closeFieldPanel);
+// Click-to-open panel disabled
+
+document.addEventListener('keydown',function(e){
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key==='ArrowDown'){e.preventDefault();if(pillBarVisible)hidePillBar();}
+  else if(e.key==='ArrowRight'){e.preventDefault();if(pillBarVisible)navigatePill(1);}
+  else if(e.key==='ArrowLeft'){e.preventDefault();if(pillBarVisible)navigatePill(-1);}
+  else if(e.key==='Escape'){closeFieldPanel();if(pillBarVisible)hidePillBar();}
+});
+</script>
+</body>
+</html>
